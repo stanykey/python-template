@@ -2,22 +2,23 @@
 import argparse
 import enum
 import logging
+import os
 import pathlib
 import shutil
 import string
 import subprocess
+import sys
 
 
 def copy_path(source: pathlib.Path, destination: pathlib.Path) -> None:
     if source.is_file():
         shutil.copy(source, destination)
     else:
-        shutil.copytree(source, destination)
+        shutil.copytree(source, destination, dirs_exist_ok=True)
 
 
 class PostActions(enum.Enum):
     nothing = 1 << 0
-    git = 1 << 1
     pipenv = 1 << 2
 
     def __str__(self) -> str:
@@ -69,42 +70,15 @@ def create_project_stub(project_path: pathlib.Path, logger: logging.Logger) -> N
     source_root = pathlib.Path(__file__).parent
 
     logger.info("Copying stubs into project directory...")
-    items_to_copy = (
-        source_root / "project_name",
-        source_root / "Pipfile",
-        source_root / "setup.py",
-        source_root / "pyproject.toml",
-        source_root / "setup.cfg",
-        source_root / ".gitignore",
-    )
-
-    for source in items_to_copy:
-        destination = project_path / source.name
-        logger.info(f"\t - copying {source.name} to {destination.relative_to(project_path.parent)}...")
-        copy_path(source, destination)
-
-    logger.info("Creating placeholders...")
-    items_to_create = {
-        "README.md": (
-            "# TODO: Fill in this README\n",
-            "\n",
-            "This project is distributed under some license. See LICENSE for details.\n",
-        ),
-        "LICENSE": tuple(),
-    }
-
-    for name, content in items_to_create.items():
-        logger.info(f"\t - creating {name}...")
-        destination = project_path / name
-        destination.touch()
-
-        destination.write_text("".join(content))
+    copy_path(source_root / "template", project_path)
+    copy_path(source_root / ".gitignore", project_path)
+    copy_path(source_root / ".pre-commit-config.yaml", project_path)
 
 
 def process_template(template_path: pathlib.Path, **keywords: str) -> None:
     with open(template_path, "r+", encoding="utf-8") as file:
         template = string.Template(file.read())
-        content = template.substitute(**keywords)
+        content = template.safe_substitute(**keywords)
 
         file.seek(0)
         file.truncate()
@@ -118,17 +92,18 @@ def tweak_project_stub(project_path: pathlib.Path, logger: logging.Logger) -> No
     package_name = project_path / "project_name"
     package_name.rename(project_path / project_path.name)
 
-    template_files = (project_path / "setup.py", project_path / "setup.cfg")
+    template_files = (project_path / "setup.py", project_path / "setup.cfg", project_path / "Pipfile")
     for template in template_files:
-        process_template(template, project_name=project_path.name)
+        process_template(
+            template,
+            project_name=project_path.name,
+            python_version=f"{sys.version_info.major}.{sys.version_info.minor}",
+            author=os.getlogin(),
+        )
 
 
 def finalize_project(project_path: pathlib.Path, actions: list[PostActions], logger: logging.Logger) -> None:
     logger.info("Finalization...")
-
-    if PostActions.git in actions:
-        logger.info("Initializing git...")
-        subprocess.check_call(["git", "init"], cwd=project_path)
 
     if PostActions.pipenv in actions:
         logger.info("Activating pipenv...")

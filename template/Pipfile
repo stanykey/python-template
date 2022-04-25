@@ -6,4 +6,6 @@ name = "pypi"
 [packages]
 
 [dev-packages]
-pre-commit = "*"
+
+[requires]
+python_version = "$python_version"
