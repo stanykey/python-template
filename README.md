@@ -5,8 +5,9 @@ A quick project skeleton for easily starting new Python Application projects.
 ---
 ## To make a new project
 
-```bash
-skeleton.py foo [--post-action {git,pipenv} [{git,pipenv} ...]
+```python
+skeleton.py foo [--post-action=pipenv]
+```
 
 What does skeleton script do?
   - This copies the contents of `skeleton` to a sibling directory `foo`, creates an empty git repo there, and drops you there to start developing.
