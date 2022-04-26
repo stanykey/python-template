@@ -30,6 +30,7 @@ class PostActions(enum.Enum):
     nothing = 1 << 0
     git = 1 << 1
     pipenv = 1 << 2
+    hooks = 1 << 3
 
     def __str__(self) -> str:
         """Support pretty print and serialization into human-readable format."""
@@ -84,8 +85,21 @@ def activate_pipenv(project_path: pathlib.Path, logger: logging.Logger) -> None:
         subprocess.check_call(["pipenv", "install", "--dev"], cwd=project_path)
 
 
+def set_precommit_hooks(project_path: pathlib.Path, logger: logging.Logger) -> None:
+    git_folder = project_path / ".git"
+    if not git_folder.exists():
+        logger.warning(f"No git repo at {project_path}")
+        return
+
+    subprocess.check_call(["pipenv", "run", "pre-commit", "install"], cwd=project_path)
+
+
 def handle_post_action(action: PostActions, project: pathlib.Path, logger: logging.Logger) -> None:
-    handlers: dict[PostActions, ActionHandler] = {PostActions.git: setup_git, PostActions.pipenv: activate_pipenv}
+    handlers: dict[PostActions, ActionHandler] = {
+        PostActions.git: setup_git,
+        PostActions.pipenv: activate_pipenv,
+        PostActions.hooks: set_precommit_hooks,
+    }
 
     handler = handlers.get(action, functools.partial(missed_handler, action))
     handler(project, logger)
