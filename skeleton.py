@@ -1,6 +1,7 @@
 """Create python project stub."""
 import argparse
 import enum
+import functools
 import logging
 import os
 import pathlib
@@ -8,6 +9,7 @@ import shutil
 import string
 import subprocess
 import sys
+import typing
 
 
 def copy_path(source: pathlib.Path, destination: pathlib.Path) -> None:
@@ -41,6 +43,37 @@ class PostActions(enum.Enum):
             return cls[str_repr]
         except KeyError:
             raise ValueError()
+
+
+ActionHandler = typing.Callable[[pathlib.Path, logging.Logger], None]
+
+
+def missed_handler(action: PostActions, _: pathlib.Path, logger: logging.Logger) -> None:
+    logger.warning(f"No handler for '{action}' action")
+
+
+def activate_pipenv(project_path: pathlib.Path, logger: logging.Logger) -> None:
+    if not shutil.which("pipenv"):
+        logger.warning("Pipenv is missing. Trying to install")
+        try:
+            subprocess.check_call(["pip", "install", "pipenv"])
+        except subprocess.CalledProcessError:
+            logger.error("Couldn't install pipenv, so this action will be skipped.")
+            logger.info(
+                "You can try to install it manually 'pip(3) install pipenv'"
+                "and then activate from project directory via 'pipenv install --dev'"
+            )
+
+    if shutil.which("pipenv"):
+        logger.info("Activating pipenv...")
+        subprocess.check_call(["pipenv", "install", "--dev"], cwd=project_path)
+
+
+def handle_post_action(action: PostActions, project: pathlib.Path, logger: logging.Logger) -> None:
+    handlers: dict[PostActions, ActionHandler] = {PostActions.pipenv: activate_pipenv}
+
+    handler = handlers.get(action, functools.partial(missed_handler, action))
+    handler(project, logger)
 
 
 def setup_logging() -> logging.Logger:
@@ -122,21 +155,8 @@ def finalize_project(project_path: pathlib.Path, actions: list[PostActions], log
     """Apply post-setup actions if any."""
     logger.info("Finalization...")
 
-    if PostActions.pipenv in actions:
-        if not shutil.which("pipenv"):
-            logger.warning("Pipenv is missing. Trying to install")
-            try:
-                subprocess.check_call(["pip", "install", "pipenv"])
-            except subprocess.CalledProcessError:
-                logger.error("Couldn't install pipenv, so this action will be skipped.")
-                logger.info(
-                    "You can try to install it manually 'pip(3) install pipenv'"
-                    "and then activate from project directory via 'pipenv install --dev'"
-                )
-
-        if shutil.which("pipenv"):
-            logger.info("Activating pipenv...")
-            subprocess.check_call(["pipenv", "install", "--dev"], cwd=project_path)
+    for action in actions:
+        handle_post_action(action, project_path, logger)
 
 
 def main() -> None:
