@@ -11,6 +11,10 @@ import sys
 
 
 def copy_path(source: pathlib.Path, destination: pathlib.Path) -> None:
+    """
+    Simple helper to copy <source> to <destination> allowing
+    use one method for both of files and directories.
+    """
     if source.is_file():
         shutil.copy(source, destination)
     else:
@@ -18,14 +22,21 @@ def copy_path(source: pathlib.Path, destination: pathlib.Path) -> None:
 
 
 class PostActions(enum.Enum):
+    """Enum of available post setup actions."""
+
     nothing = 1 << 0
     pipenv = 1 << 2
 
     def __str__(self) -> str:
+        """Support pretty print and serialization into human-readable format."""
         return self.name
 
     @classmethod
     def from_string(cls, str_repr: str) -> "PostActions":
+        """
+        The factory method creates an instance from the string.
+        Useful when reading human-readable configs.
+        """
         try:
             return cls[str_repr]
         except KeyError:
@@ -33,11 +44,13 @@ class PostActions(enum.Enum):
 
 
 def setup_logging() -> logging.Logger:
+    """Configure built-in logging subsystem."""
     logging.basicConfig(format="%(levelname)s: %(message)s", level=logging.DEBUG)
     return logging.getLogger(__name__)
 
 
 def parse_arguments() -> argparse.Namespace:
+    """Configure parser and parse command-line arguments."""
     args_parser = argparse.ArgumentParser(description="Create stub for Python project.")
 
     args_parser.add_argument(
@@ -60,6 +73,7 @@ def parse_arguments() -> argparse.Namespace:
 
 
 def create_project_stub(project_path: pathlib.Path, logger: logging.Logger) -> None:
+    """Create project stub at <project_path> location."""
     try:
         project_path.mkdir(parents=True, exist_ok=False)
     except FileExistsError:
@@ -76,6 +90,7 @@ def create_project_stub(project_path: pathlib.Path, logger: logging.Logger) -> N
 
 
 def process_template(template_path: pathlib.Path, **keywords: str) -> None:
+    """Read template file, substitute keywords and save updated file."""
     with open(template_path, "r+", encoding="utf-8") as file:
         template = string.Template(file.read())
         content = template.safe_substitute(**keywords)
@@ -87,6 +102,7 @@ def process_template(template_path: pathlib.Path, **keywords: str) -> None:
 
 
 def tweak_project_stub(project_path: pathlib.Path, logger: logging.Logger) -> None:
+    """Tweak project stub: do some renaming and substitutions."""
     logger.info(f"Tweaking stubs ({project_path}) files...")
 
     package_name = project_path / "project_name"
@@ -103,6 +119,7 @@ def tweak_project_stub(project_path: pathlib.Path, logger: logging.Logger) -> No
 
 
 def finalize_project(project_path: pathlib.Path, actions: list[PostActions], logger: logging.Logger) -> None:
+    """Apply post-setup actions if any."""
     logger.info("Finalization...")
 
     if PostActions.pipenv in actions:
@@ -111,6 +128,7 @@ def finalize_project(project_path: pathlib.Path, actions: list[PostActions], log
 
 
 def main() -> None:
+    """Application entry point."""
     logger = setup_logging()
 
     args = parse_arguments()
