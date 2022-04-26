@@ -123,8 +123,20 @@ def finalize_project(project_path: pathlib.Path, actions: list[PostActions], log
     logger.info("Finalization...")
 
     if PostActions.pipenv in actions:
-        logger.info("Activating pipenv...")
-        subprocess.check_call(["pipenv", "install", "--dev"], cwd=project_path)
+        if not shutil.which("pipenv"):
+            logger.warning("Pipenv is missing. Trying to install")
+            try:
+                subprocess.check_call(["pip", "install", "pipenv"])
+            except subprocess.CalledProcessError:
+                logger.error("Couldn't install pipenv, so this action will be skipped.")
+                logger.info(
+                    "You can try to install it manually 'pip(3) install pipenv'"
+                    "and then activate from project directory via 'pipenv install --dev'"
+                )
+
+        if shutil.which("pipenv"):
+            logger.info("Activating pipenv...")
+            subprocess.check_call(["pipenv", "install", "--dev"], cwd=project_path)
 
 
 def main() -> None:
