@@ -23,10 +23,12 @@ def copy_path(source: pathlib.Path, destination: pathlib.Path) -> None:
         shutil.copytree(source, destination, dirs_exist_ok=True)
 
 
+@enum.unique
 class PostActions(enum.Enum):
     """Enum of available post setup actions."""
 
     nothing = 1 << 0
+    git = 1 << 1
     pipenv = 1 << 2
 
     def __str__(self) -> str:
@@ -52,6 +54,19 @@ def missed_handler(action: PostActions, _: pathlib.Path, logger: logging.Logger)
     logger.warning(f"No handler for '{action}' action")
 
 
+def setup_git(project_path: pathlib.Path, logger: logging.Logger) -> None:
+    logger.info("Setup git repo for the project...")
+    try:
+        repo_path = project_path.as_posix()
+        make_call = subprocess.check_call
+        make_call(["git", "config", "--global", "--add", "safe.directory", str(repo_path)])
+        make_call(["git", "init", str(repo_path)])
+        make_call(["git", "-C", str(repo_path), "add", "--all"])
+        make_call(["git", "-C", str(repo_path), "commit", "-m", "Initial commit"])
+    except subprocess.CalledProcessError as ex:
+        logger.error(f"Failed to setup git: {ex}")
+
+
 def activate_pipenv(project_path: pathlib.Path, logger: logging.Logger) -> None:
     if not shutil.which("pipenv"):
         logger.warning("Pipenv is missing. Trying to install")
@@ -70,7 +85,7 @@ def activate_pipenv(project_path: pathlib.Path, logger: logging.Logger) -> None:
 
 
 def handle_post_action(action: PostActions, project: pathlib.Path, logger: logging.Logger) -> None:
-    handlers: dict[PostActions, ActionHandler] = {PostActions.pipenv: activate_pipenv}
+    handlers: dict[PostActions, ActionHandler] = {PostActions.git: setup_git, PostActions.pipenv: activate_pipenv}
 
     handler = handlers.get(action, functools.partial(missed_handler, action))
     handler(project, logger)
