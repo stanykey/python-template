@@ -62,6 +62,7 @@ def setup_git(project_path: pathlib.Path, logger: logging.Logger) -> None:
         make_call = subprocess.check_call
         make_call(["git", "config", "--global", "--add", "safe.directory", str(repo_path)])
         make_call(["git", "init", str(repo_path)])
+        make_call(["git", "-C", str(repo_path), "branch", "-M", "main"])
         make_call(["git", "-C", str(repo_path), "add", "--all"])
         make_call(["git", "-C", str(repo_path), "commit", "-m", "Initial commit"])
     except subprocess.CalledProcessError as ex:
