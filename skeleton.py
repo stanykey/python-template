@@ -1,7 +1,5 @@
 """Create python project stub."""
 import argparse
-import enum
-import functools
 import logging
 import os
 import pathlib
@@ -9,7 +7,6 @@ import shutil
 import string
 import subprocess
 import sys
-import typing
 
 
 def copy_path(source: pathlib.Path, destination: pathlib.Path) -> None:
@@ -21,38 +18,6 @@ def copy_path(source: pathlib.Path, destination: pathlib.Path) -> None:
         shutil.copy(source, destination)
     else:
         shutil.copytree(source, destination, dirs_exist_ok=True)
-
-
-@enum.unique
-class PostActions(enum.Enum):
-    """Enum of available post setup actions."""
-
-    nothing = 1 << 0
-    git = 1 << 1
-    pipenv = 1 << 2
-    hooks = 1 << 3
-
-    def __str__(self) -> str:
-        """Support pretty print and serialization into human-readable format."""
-        return self.name
-
-    @classmethod
-    def from_string(cls, str_repr: str) -> "PostActions":
-        """
-        The factory method creates an instance from the string.
-        Useful when reading human-readable configs.
-        """
-        try:
-            return cls[str_repr]
-        except KeyError:
-            raise ValueError()
-
-
-ActionHandler = typing.Callable[[pathlib.Path, logging.Logger], None]
-
-
-def missed_handler(action: PostActions, _: pathlib.Path, logger: logging.Logger) -> None:
-    logger.warning(f"No handler for '{action}' action")
 
 
 def setup_git(project_path: pathlib.Path, logger: logging.Logger) -> None:
@@ -95,17 +60,6 @@ def set_precommit_hooks(project_path: pathlib.Path, logger: logging.Logger) -> N
     subprocess.check_call(["pipenv", "run", "pre-commit", "install"], cwd=project_path)
 
 
-def handle_post_action(action: PostActions, project: pathlib.Path, logger: logging.Logger) -> None:
-    handlers: dict[PostActions, ActionHandler] = {
-        PostActions.git: setup_git,
-        PostActions.pipenv: activate_pipenv,
-        PostActions.hooks: set_precommit_hooks,
-    }
-
-    handler = handlers.get(action, functools.partial(missed_handler, action))
-    handler(project, logger)
-
-
 def setup_logging() -> logging.Logger:
     """Configure built-in logging subsystem."""
     logging.basicConfig(format="%(levelname)s: %(message)s", level=logging.DEBUG)
@@ -120,16 +74,6 @@ def parse_arguments() -> argparse.Namespace:
         "project_path",
         type=pathlib.Path,
         help="New project location. The last child name will be picked as the project name",
-    )
-
-    args_parser.add_argument(
-        "--post-action",
-        type=PostActions.from_string,
-        default=PostActions.nothing,
-        choices=list(PostActions)[1:],
-        help="Post-setup options",
-        dest="post_actions",
-        nargs="+",
     )
 
     return args_parser.parse_args()
@@ -181,12 +125,13 @@ def tweak_project_stub(project_path: pathlib.Path, logger: logging.Logger) -> No
         )
 
 
-def finalize_project(project_path: pathlib.Path, actions: list[PostActions], logger: logging.Logger) -> None:
+def finalize_project(project_path: pathlib.Path, logger: logging.Logger) -> None:
     """Apply post-setup actions if any."""
     logger.info("Finalization...")
 
-    for action in actions:
-        handle_post_action(action, project_path, logger)
+    setup_git(project_path, logger)
+    activate_pipenv(project_path, logger)
+    set_precommit_hooks(project_path, logger)
 
 
 def main() -> None:
@@ -198,7 +143,7 @@ def main() -> None:
     try:
         create_project_stub(project_path, logger)
         tweak_project_stub(project_path, logger)
-        finalize_project(project_path, args.post_actions, logger)
+        finalize_project(project_path, logger)
     except FileExistsError:
         logger.error("Project directory already exists.")
     except FileNotFoundError:
